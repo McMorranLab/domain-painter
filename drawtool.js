@@ -65,7 +65,7 @@ const draw = (e) => {
     ctx.stroke();
 }
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('mouseup', (e) => {
     isPainting = false;
     ctx.stroke();
     ctx.beginPath();
