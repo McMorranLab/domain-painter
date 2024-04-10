@@ -1,6 +1,7 @@
 const canvas = document.getElementById('drawing-board');
 const toolbar = document.getElementById('toolbar');
 const ctx = canvas.getContext('2d');
+const brush = document.getElementById('chooseBrush');
 
 const canvasOffsetX = canvas.offsetLeft;
 const canvasOffsetY = canvas.offsetTop;
@@ -14,6 +15,8 @@ let drawingWidth = 1024;
 let drawingHeight = 1024;
 let startX;
 let startY;
+
+console.log(brush.value);
 
 /*
 toolbar.addEventListener('click', e=> {
@@ -54,10 +57,11 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 const draw = (e) => {
-    if(!isPainting) {
+    if(!isPainting || brush.value==="null") {
         return;
     }
 
+    ctx.strokeStyle = brush.value
     ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
 
