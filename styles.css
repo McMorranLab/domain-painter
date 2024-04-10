@@ -2,13 +2,6 @@ html{
     height: 100%
 }
 
-.header {
-    padding: 1px;
-    text-align: center;
-    background-color: #202020;
-    font-size: 12px;
-  }
-
 h1 {
     background: #7F7FD5;
     background: -webkit-linear-gradient(to right, #91eae4, #86a8e7, #7f7fd5);
@@ -41,10 +34,12 @@ h2 {
 }
 
 #toolbar {
+    margin-top: 0px;
     display: flex;
     flex-direction: column;
-    padding: 5px;
-    width: 70px;
+    padding-left: 10px;
+    padding-right: 10px;
+    width: 80px;
     background-color: #202020;
     height:100%;
 }
@@ -54,11 +49,11 @@ h2 {
 }
 
 #toolbar label {
-    font-size: 12px;
+    font-size: 14px;
 }
 
 #toolbar input {
-    width: 100%;
+    width: 90%;
 }
 
 #toolbar button {
@@ -67,4 +62,15 @@ h2 {
     border-radius: 4px;
     color: white;
     padding: 2px;
+}
+
+#checkbox {
+    display:flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center"
+}
+
+#checkbox input[type=checkbox] {
+    transform: scale(0.5);
 }

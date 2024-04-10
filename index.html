@@ -8,26 +8,37 @@
     <title>Magnetic domain painting tool</title>
 </head>
 <body>
-    <div class="header">
-    <h1>Magnetic domain seed generator</h1>
-    </div>
     <section class="container">
         <div id="toolbar">
-            <h2>Draw</h2>
-            <label for="enterWidthInput">Width</label><br>
+            <h2>Canvas</h2>
+            <button id="clear">Reset</button>
+            <button id="upload">Upload</button>
+            <label for="enterWidthInput">Width</label>
             <input type="number" id="enterWidthInput" name="widthInput" value="1024"><br>
-            <label for="enterHeightInput">Height</label><br>
+            <label for="enterHeightInput">Height</label>
             <input type="number" id="enterHeightInput" name="heightInput" value="1024"><br>
+            <h2>Draw</h2>
             <label for="lineWidth">Line Width</label>
             <input id="lineWidth" name="lineWidth" type="number" value="5">
-            <button id="upload">Upload</button>
-            <button id="clear">Reset</button>
+            <select name="brush" id="chooseBrush" multiple>
+              <option value="pen">Draw</option>
+              <option value="eraser">Erase</option>
+              <option value="bl">Place BL</option>
+            </select> 
+            <h2>Render</h2>
+            <div id="checkbox">
+                <label for="neelcaps">Néel Caps</label>
+                <input type="checkbox" id="neelcaps" name="neelcaps" value="false">
+            </div>
+            <button id="save">Save</button>
+
         </div>
-        <div class="drawing-board">
-            <canvas id="drawing-board"></canvas>
-        </div>
+        <canvas id="drawing-board"></canvas>
+    
     </section>
+
     <script src="./drawtool.js"></script>
+    <!--script src="./panzoom.js"></script-->
     <!--script async src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script-->
 </body>
 </html>
