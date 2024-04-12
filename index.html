@@ -11,32 +11,53 @@
     <section class="container">
         <div id="toolbar">
             <h2>Canvas</h2>
-            <button id="clear">Reset</button>
-            <button id="upload">Upload</button>
+            <button id="clear" class="button">Reset</button>
             <label for="enterWidthInput">Width</label>
-            <input type="number" id="enterWidthInput" name="widthInput" value="1024"><br>
+            <input type="number" id="enterWidthInput" name="widthInput" value="1024" class="input"><br>
             <label for="enterHeightInput">Height</label>
-            <input type="number" id="enterHeightInput" name="heightInput" value="1024"><br>
-            <h2>Draw</h2>
-            <label for="lineWidth">Line Width</label>
-            <input id="lineWidth" name="lineWidth" type="number" value="5">
-            <select name="brush" id="chooseBrush" multiple>
-              <option value="black" selected="selected">Draw</option>
-              <option value="white">Erase</option>
-              <option value="null">Place BL</option>
-            </select> 
-            <button id="findContour">Contours</button>
-
-            <h2>Render</h2>
-            <div id="checkbox">
-                <label for="neelcaps">Néel Caps</label>
-                <input type="checkbox" id="neelcaps" name="neelcaps" value="false">
+            <input type="number" id="enterHeightInput" name="heightInput" value="1024" class="input"><br>
+            <h2>Tools</h2>
+            <div class="toolbuttons">
+                <button id='pantool' name='pantool' class="imgbutton">
+                    <img src='./icons/pan.png' height="30px" width="30px"/>
+                </button>
             </div>
-            <button id="save">Save</button>
-
+            <div class="toolbuttons">
+                <button id='zoomIn' name='zoomIn' class="imgbutton zoom">
+                    <img src='./icons/zoomin.png' height="30px" width="30px"/>
+                </button>
+                <button id='zoomOut' name='zoomOut' class="imgbutton zoom">
+                    <img src='./icons/zoomout.png' height="30px" width="30px"/>
+                </button>
+                <button id='undo' name='undo' class="imgbutton">
+                    <img src='./icons/undo.png' height="30px" width="30px"/>
+                </button>
+                <button id='redo' name='redo' class="imgbutton">
+                    <img src='./icons/redo.png' height="30px" width="30px"/>
+                </button>
+                <button id='drawtool' name='drawtool' class="imgbutton">
+                    <img src='./icons/draw.png' height="30px" width="30px"/>
+                </button>
+                <button id='erasetool' name='erasetool' class="imgbutton">
+                    <img src='./icons/erase.png' height="30px" width="30px"/>
+                </button>
+            </div>
+            <label for="lineWidth">Line Width</label>
+            <input id="lineWidth" name="lineWidth" type="number" value="32" class="input">
+            <button id="findContour" class="button">Find Contours</button>
+            <button id='bltool' name='bltool' class="button">Place Blochline</button>
+            <h2>Render</h2>
+            <div class="checkboxcontainer">
+                <input type="checkbox" id="neelcaps" name="neelcaps" value="false">
+                <label for="neelcaps">Néel Caps</label>
+            </div>
+            <button id="save" class="button">Save</button>
         </div>
-        <canvas id="drawing-board"></canvas>
-    
+        <div id="workspace">
+            <div class="canvas-container">
+                 <canvas id="onScreen"></canvas>
+            </div>
+       </div>
     </section>
 
     <script src="./drawtool.js"></script>
