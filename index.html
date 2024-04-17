@@ -9,37 +9,39 @@
 </head>
 <body>
     <section class="container">
-        <div id="toolbar">
+        <div id="toolbar" class="toolbar">
             <h2>Canvas</h2>
             <button id="clear" class="button">Reset</button>
-            <label for="enterWidthInput">Width</label>
-            <input type="number" id="enterWidthInput" name="widthInput" value="1024" class="input"><br>
-            <label for="enterHeightInput">Height</label>
-            <input type="number" id="enterHeightInput" name="heightInput" value="1024" class="input"><br>
+            <label for="canvasWidthInput">Width</label>
+            <input type="number" id="canvasWidthInput" name="widthInput" value="1024" class="input"><br>
+            <label for="canvasHeightInput">Height</label>
+            <input type="number" id="canvasHeightInput" name="heightInput" value="1024" class="input"><br>
             <h2>Tools</h2>
             <div class="toolbuttons">
-                <button id='pantool' name='pantool' class="imgbutton">
-                    <img src='./icons/pan.png' height="30px" width="30px"/>
+                <button id='pantool' name='pantool' class="toolBtn">
+                    <img src='./icons/pan.png' id='pantoolImg' class="toolBtnImg" height="30px" width="30px"/>
+                </button>
+            </div>
+            <div class="toolbuttons zoomcontainer">
+                <button id='zoomIn' name='zoomIn' class="toolBtn">
+                    <img src='./icons/zoomin.png' id='zoomInImg' class="toolBtnImg" height="30px" width="30px"/>
+                </button>
+                <button id='zoomOut' name='zoomOut' class="toolBtn">
+                    <img src='./icons/zoomout.png' id='zoomOutImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
             </div>
             <div class="toolbuttons">
-                <button id='zoomIn' name='zoomIn' class="imgbutton zoom">
-                    <img src='./icons/zoomin.png' height="30px" width="30px"/>
+                <button id='undo' name='undo' class="toolBtn">
+                    <img src='./icons/undo.png' id='undoImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
-                <button id='zoomOut' name='zoomOut' class="imgbutton zoom">
-                    <img src='./icons/zoomout.png' height="30px" width="30px"/>
+                <button id='redo' name='redo' class="toolBtn">
+                    <img src='./icons/redo.png' id='redoImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
-                <button id='undo' name='undo' class="imgbutton">
-                    <img src='./icons/undo.png' height="30px" width="30px"/>
+                <button id='drawtool' name='drawtool' class="toolBtn">
+                    <img src='./icons/draw.png' id='drawtoolImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
-                <button id='redo' name='redo' class="imgbutton">
-                    <img src='./icons/redo.png' height="30px" width="30px"/>
-                </button>
-                <button id='drawtool' name='drawtool' class="imgbutton">
-                    <img src='./icons/draw.png' height="30px" width="30px"/>
-                </button>
-                <button id='erasetool' name='erasetool' class="imgbutton">
-                    <img src='./icons/erase.png' height="30px" width="30px"/>
+                <button id='erasetool' name='erasetool' class="toolBtn">
+                    <img src='./icons/erase.png' id='erasetoolImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
             </div>
             <label for="lineWidth">Line Width</label>
@@ -59,9 +61,6 @@
             </div>
        </div>
     </section>
-
     <script src="./drawtool.js"></script>
-    <!--script src="./panzoom.js"></script-->
-    <!--script async src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script-->
 </body>
 </html>

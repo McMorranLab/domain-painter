@@ -83,7 +83,7 @@ h2 {
     margin-bottom: 1px;
 }
 
-.toolbuttons .imgbutton {
+.toolbuttons .toolBtn {
     width: 50%;
     border: none;
     cursor: pointer;
@@ -91,7 +91,7 @@ h2 {
     background-color: inherit;
 }
 
-.toolbuttons img {
+.toolbuttons .toolBtnImg {
     width: calc(100% - (0px * 2));
     margin: 0px;
     background-color: white;
@@ -117,6 +117,7 @@ label[for="neelcaps"]{
     height: 100%;
     display: flex;
     background: lightgray;
+    min-width: 0;
 }
 
 .canvas-container {
@@ -124,5 +125,5 @@ label[for="neelcaps"]{
 }
 
 canvas {
-    background: white;
+    background: gray;
 }
