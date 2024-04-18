@@ -5,7 +5,6 @@
 //Create an onscreen canvas. This is what the user sees and interacts with.
 const onScreenCVS = document.getElementById("onScreen");
 const onScreenCTX = onScreenCVS.getContext("2d", {willReadFrequently: true,});
-
 //Create an offscreen canvas. This is where we will actually be drawing, in order to keep the image consistent and free of distortions.
 let offScreenCVS = document.createElement("canvas");
 let offScreenCTX = offScreenCVS.getContext("2d");
@@ -14,11 +13,7 @@ offScreenCVS.width = 1024;
 offScreenCVS.height = 1024;
 offScreenCTX.fillStyle = 'white';
 offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
-let canvasAspectRatio = offScreenCVS.height/offScreenCVS.width
-
-//Create a canvas for the contours identified by OpenCV
-const contoursCVS = document.getElementById("contourDisplay");
-const contoursCTX = contoursCVS.getContext("2d", {willReadFrequently: true,});
+canvasAspectRatio = offScreenCVS.height/offScreenCVS.width
 
 //====================================//
 //======= * * * Toolbar * * * ========//
@@ -112,8 +107,6 @@ let rect;
 initializeOnScreenCanvas();
 onScreenCVS.width = baseDimensionX;
 onScreenCVS.height = baseDimensionY;
-contoursCVS.width = baseDimensionX;
-contoursCVS.height = baseDimensionY;
 let img = new Image();
 let source = offScreenCVS.toDataURL();
 renderImage();
@@ -143,15 +136,14 @@ function renderImage() {
 function initializeOnScreenCanvas() {
   rect = onScreenCVS.parentNode.getBoundingClientRect();
   let rectAspectRatio = rect.height/rect.width;
-  let offScreenAspectRatio = offScreenCVS.height / offScreenCVS.width
-  let canvasBuffer = 4;
-  let displayAspectRatio = (offScreenCVS.height)/(2*offScreenCVS.width+canvasBuffer);
-  if (rectAspectRatio > displayAspectRatio) {
-    baseDimensionX = ((rect.width-canvasBuffer)/2)
-    baseDimensionY = Math.floor(baseDimensionX * offScreenAspectRatio)
+  let offScreenAspectRatio = offScreenCVS.height/offScreenCVS.width;
+
+  if (rectAspectRatio > offScreenAspectRatio) {
+    baseDimensionX = rect.width
+    baseDimensionY = Math.floor(rect.width * offScreenAspectRatio)
   } else {
     baseDimensionY = rect.height
-    baseDimensionX = Math.floor(baseDimensionY / offScreenAspectRatio)
+    baseDimensionX = Math.floor(rect.height / offScreenAspectRatio)
   }
 }
 
@@ -159,7 +151,6 @@ function initializeOnScreenCanvas() {
 function flexCanvasSize() {
   initializeOnScreenCanvas();
   renderImage();
-  renderContoursImage();
 }
 
 window.onresize = flexCanvasSize;
@@ -300,8 +291,6 @@ function handleMouseUp() {
   points = [];
   //Reset redostack
   redoStack = [];
-  findContours();
-  renderContoursImage();
 }
 
 //Action functions
@@ -346,97 +335,4 @@ function actionDraw(e) {
   lastY = mouseY;
   firstX = lastX;
   firstY = lastY;
-}
-
-//====================================//
-//======== * * * OpenCV * * * ========//
-//====================================//
-
-let contoursImg = new Image();
-let contoursSource = offScreenCVS.toDataURL();
-findContours();
-renderContoursImage();
-
-findContoursBtn.addEventListener('click', e => {
-  findContours();
-  renderContoursImage();
-});
-
-function findContours() {
-  if (cvloaded = false) {
-    console.log('Waiting for OpenCV to load...');
-  } else if (cvloaded = true) {
-    // read source image
-    let cvsource = cv.imread(img);
-    console.log("Image loaded in OpenCV format...");
-    // initialize matrix objects
-    let dst = cv.Mat.zeros(cvsource.rows,cvsource.cols,cv.CV_8UC3);
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
-    console.log("Matrices initialized...");
-    // preprocess image
-    cv.cvtColor(cvsource, cvsource, cv.COLOR_RGBA2GRAY, 0);
-    cv.threshold(cvsource, cvsource, 120, 200, cv.THRESH_BINARY);
-    console.log("Image filtered...");
-    // find contours
-    cv.findContours(cvsource, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-    console.log("Contours found!");
-    // draw contours onto dst matrix
-    for (let i = 0; i < contours.size(); ++i) {
-      let color = new cv.Scalar(Math.round(Math.random() * 255), Math.round(Math.random() * 255),
-                                Math.round(Math.random() * 255));
-      cv.drawContours(dst, contours, i, color, 5, cv.LINE_8, hierarchy, 100);
-    }
-
-    contoursSource = imageDataToDataURL(matToImageData(dst));
-    cvsource.delete(); dst.delete(); contours.delete(); hierarchy.delete();
-  }
-}
-
-//Once the image is loaded, draw the image onto the onscreen canvas.
-function renderContoursImage() {
-  contoursImg.src = contoursSource;
-  contoursImg.onload = () => {
-    //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
-    contoursCVS.width = baseDimensionX;
-    contoursCVS.height = baseDimensionY;
-    //Prevent blurring
-    contoursCTX.imageSmoothingEnabled = false;
-    contoursCTX.drawImage(contoursImg, 0, 0, contoursCVS.width, contoursCVS.height);
-  };
-}
-
-function matToImageData(mat) {
-  // Convert the Mat to RGBA
-  let rgbaMat = new cv.Mat();
-  cv.cvtColor(mat, rgbaMat, cv.COLOR_BGR2RGBA);
-
-  // Create ImageData from the cv.Mat
-  let imgData = new ImageData(
-    new Uint8ClampedArray(rgbaMat.data),
-    rgbaMat.cols,
-    rgbaMat.rows
-  );
-
-  // Free memory
-  rgbaMat.delete();
-  return imgData
-}
-
-function imageDataToDataURL(imageData) {
-  // Create a temporary canvas
-  let tempcanvas = document.createElement('canvas');
-  let tempctx = tempcanvas.getContext('2d');
-
-  // Set canvas dimensions
-  tempcanvas.width = imageData.width;
-  tempcanvas.height = imageData.height;
-
-  // Put the ImageData onto the canvas
-  tempctx.putImageData(imageData, 0, 0);
-
-  // Convert canvas to data URL
-  let dataURL = tempcanvas.toDataURL();
-
-  return dataURL
 }

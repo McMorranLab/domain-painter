@@ -58,9 +58,20 @@
         <div id="workspace">
             <div class="canvas-container">
                  <canvas id="onScreen"></canvas>
+                 <canvas id="contourDisplay"></canvas>
             </div>
        </div>
     </section>
-    <script src="./drawtool.js"></script>
-</body>
+    <script>
+    let cvloaded = false;
+    function onOpenCvReady() {
+        cv['onRuntimeInitialized']=()=>{
+            cvloaded = true;
+            let cv = window.cv
+            console.log("OpenCV has loaded.")
+        };
+    }
+    </script>
+    <script src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script></body>
+    <script src="./drawtool.js" type="module"></script>
 </html>
