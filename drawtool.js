@@ -46,8 +46,6 @@ const eraseBtn = document.getElementById("erasetool")
 // * Line Width * //
 const lineWidthInput = document.getElementById("lineWidth")
 let lineWidth = 32;
-// * Contour Finding * //
-const findContoursBtn = document.getElementById("findContour")
 // * Placing Blochlines * //
 const placeBlochlineBtn = document.getElementById("bltool")
 
@@ -121,9 +119,17 @@ renderImage();
 //Add event listeners for canvas resizing
 canvasWidthInput.addEventListener('change', e => {
   offScreenCVS.width = e.target.value;
+  initializeOnScreenCanvas();
+  resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
 });
 canvasHeightInput.addEventListener('change', e => {
-  offScreenCVS.height = e.target.value;
+  offScreenCVS.width = e.target.value;
+  initializeOnScreenCanvas();
+  resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
 });
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
@@ -170,15 +176,20 @@ window.onresize = flexCanvasSize;
 
 //Provide image reset functionality
 clearBtn.addEventListener('click', e => {
+  resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
+});
+
+function resetOffScreenCVS() {
   offScreenCTX.fillStyle = 'white';
   offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
-  //offScreenCTX.clearRect(0, 0, offScreenCVS.width, offScreenCVS.height);
   undoStack = [];
   redoStack = [];
   points = [];
   source = offScreenCVS.toDataURL();
   renderImage();
-});
+}
 
 //====================================//
 //======= * * * Undo/Redo * * * ======//
@@ -215,6 +226,8 @@ function actionUndoRedo(pushStack, popStack) {
   redrawPoints();
   source = offScreenCVS.toDataURL();
   renderImage();
+  findContours();
+  renderContoursImage();
 }
 
 function redrawPoints() {
@@ -291,6 +304,7 @@ function handleMouseDown(e) {
   let ratio = onScreenCVS.width / offScreenCVS.width;
   firstX = Math.floor(e.offsetX / ratio);
   firstY = Math.floor(e.offsetY / ratio);
+  actionDraw(e);
 }
 
 function handleMouseUp() {
@@ -357,15 +371,10 @@ let contoursSource = offScreenCVS.toDataURL();
 findContours();
 renderContoursImage();
 
-findContoursBtn.addEventListener('click', e => {
-  findContours();
-  renderContoursImage();
-});
-
 function findContours() {
-  if (cvloaded = false) {
+  if (cvloaded === false) {
     console.log('Waiting for OpenCV to load...');
-  } else if (cvloaded = true) {
+  } else if (cvloaded ===true) {
     // read source image
     let cvsource = cv.imread(img);
     console.log("Image loaded in OpenCV format...");
@@ -407,20 +416,24 @@ function renderContoursImage() {
 }
 
 function matToImageData(mat) {
-  // Convert the Mat to RGBA
-  let rgbaMat = new cv.Mat();
-  cv.cvtColor(mat, rgbaMat, cv.COLOR_BGR2RGBA);
+  if (cvloaded === false) {
+    console.log('Waiting for OpenCV to load...');
+  } else if (cvloaded === true) {
+    // Convert the Mat to RGBA
+    let rgbaMat = new cv.Mat();
+    cv.cvtColor(mat, rgbaMat, cv.COLOR_BGR2RGBA);
 
-  // Create ImageData from the cv.Mat
-  let imgData = new ImageData(
-    new Uint8ClampedArray(rgbaMat.data),
-    rgbaMat.cols,
-    rgbaMat.rows
-  );
+    // Create ImageData from the cv.Mat
+    let imgData = new ImageData(
+      new Uint8ClampedArray(rgbaMat.data),
+      rgbaMat.cols,
+      rgbaMat.rows
+    );
 
-  // Free memory
-  rgbaMat.delete();
-  return imgData
+    // Free memory
+    rgbaMat.delete();
+    return imgData
+  }
 }
 
 function imageDataToDataURL(imageData) {
@@ -440,3 +453,8 @@ function imageDataToDataURL(imageData) {
 
   return dataURL
 }
+
+//====================================//
+//==== * * * Magnetization * * * =====//
+//====================================//
+

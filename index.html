@@ -46,7 +46,6 @@
             </div>
             <label for="lineWidth">Line Width</label>
             <input id="lineWidth" name="lineWidth" type="number" value="32" class="input">
-            <button id="findContour" class="button">Find Contours</button>
             <button id='bltool' name='bltool' class="button">Place Blochline</button>
             <h2>Render</h2>
             <div class="checkboxcontainer">
@@ -72,6 +71,12 @@
         };
     }
     </script>
-    <script src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script></body>
+    <script src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+    <script type="module">
+        import nj from 'https://cdn.jsdelivr.net/npm/@d4c/numjs/build/module/numjs.min.js';
+        // optional: assign to global to let other code can use:
+        globalThis.nj = nj;
+    </script>
     <script src="./drawtool.js" type="module"></script>
+</body>
 </html>
