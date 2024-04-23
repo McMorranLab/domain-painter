@@ -48,6 +48,8 @@
             <input id="lineWidth" name="lineWidth" type="number" value="32" class="input">
             <button id='bltool' name='bltool' class="button">Place Blochline</button>
             <h2>Render</h2>
+            <label for="dwThickness">DW Thickness</label>
+            <input id="dwThickness" name="dwThickness" type="number" value="31" class="input">
             <div class="checkboxcontainer">
                 <input type="checkbox" id="neelcaps" name="neelcaps" value="false">
                 <label for="neelcaps">Néel Caps</label>
@@ -65,18 +67,13 @@
     let cvloaded = false;
     function onOpenCvReady() {
         cv['onRuntimeInitialized']=()=>{
+            let cv = window.cv;
+            console.log("OpenCV has loaded.");
             cvloaded = true;
-            let cv = window.cv
-            console.log("OpenCV has loaded.")
         };
     }
     </script>
-    <script src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
-    <script type="module">
-        import nj from 'https://cdn.jsdelivr.net/npm/@d4c/numjs/build/module/numjs.min.js';
-        // optional: assign to global to let other code can use:
-        globalThis.nj = nj;
-    </script>
+    <script async src="./opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
     <script src="./drawtool.js" type="module"></script>
 </body>
 </html>

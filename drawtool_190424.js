@@ -1,5 +1,3 @@
-import { red, green, blue } from "./coolwarm.js"
-
 //====================================//
 //======= * * * Canvas * * * =========//
 //====================================//
@@ -18,9 +16,9 @@ offScreenCTX.fillStyle = 'white';
 offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
 let canvasAspectRatio = offScreenCVS.height/offScreenCVS.width
 
-//Create a canvas for the magnetization produced by the script
-const magCVS = document.getElementById("contourDisplay");
-const magCTX = magCVS.getContext("2d", {willReadFrequently: true,});
+//Create a canvas for the contours identified by OpenCV
+const contoursCVS = document.getElementById("contourDisplay");
+const contoursCTX = contoursCVS.getContext("2d", {willReadFrequently: true,});
 
 //====================================//
 //======= * * * Toolbar * * * ========//
@@ -48,9 +46,6 @@ const eraseBtn = document.getElementById("erasetool")
 // * Line Width * //
 const lineWidthInput = document.getElementById("lineWidth")
 let lineWidth = 32;
-// * Domain Wall Width * //
-const dwThicknessInput = document.getElementById("dwThickness")
-let dwThickness = 31;
 // * Placing Blochlines * //
 const placeBlochlineBtn = document.getElementById("bltool")
 
@@ -102,22 +97,7 @@ const tools = {
 //======== * * * State * * * =========//
 //====================================//
 
-// OpenCV global Matrices and MatrixVectors library
-let mats = {};
-let state = {
-  drawingDone: true
-};
-
-// useful function for async behavior
-function waitFor(conditionFunction) {
-
-  const poll = resolve => {
-    if(conditionFunction()) resolve();
-    else setTimeout(_ => poll(resolve), 100);
-  }
-
-  return new Promise(poll);
-}
+// WIP
 
 //====================================//
 //======= * * * Rendering * * * ======//
@@ -130,19 +110,27 @@ let rect;
 initializeOnScreenCanvas();
 onScreenCVS.width = baseDimensionX;
 onScreenCVS.height = baseDimensionY;
-magCVS.width = baseDimensionX;
-magCVS.height = baseDimensionY;
+contoursCVS.width = baseDimensionX;
+contoursCVS.height = baseDimensionY;
 let img = new Image();
 let source = offScreenCVS.toDataURL();
-let magImg = new Image();
-let magSource = offScreenCVS.toDataURL();
 renderImage();
-startOpenCV();
 
-async function renderBoth(redraw = true) {
-  renderImage();
-  renderMagImage(redraw);
-}
+//Add event listeners for canvas resizing
+canvasWidthInput.addEventListener('change', e => {
+  offScreenCVS.width = e.target.value;
+  initializeOnScreenCanvas();
+  resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
+});
+canvasHeightInput.addEventListener('change', e => {
+  offScreenCVS.width = e.target.value;
+  initializeOnScreenCanvas();
+  resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
+});
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
 function renderImage() {
@@ -154,34 +142,7 @@ function renderImage() {
     //Prevent blurring
     onScreenCTX.imageSmoothingEnabled = false;
     onScreenCTX.drawImage(img, 0, 0, onScreenCVS.width, onScreenCVS.height);
-    state.drawingDone = true;
-    console.log("Normal image drawn")
   };
-}
-
-//Once the image is loaded, draw the image onto the onscreen canvas.
-async function renderMagImage(redraw = true) {
-  if (redraw === true) {
-    magSource = await drawMagSource();
-    magImg.src = magSource;
-    magImg.onload = () => {
-      //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
-      magCVS.width = baseDimensionX;
-      magCVS.height = baseDimensionY;
-      //Prevent blurring
-      magCTX.imageSmoothingEnabled = false;
-      magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
-      console.log("Mag image posted")
-    };
-  } else {
-    //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
-    magCVS.width = baseDimensionX;
-    magCVS.height = baseDimensionY;
-    //Prevent blurring
-    magCTX.imageSmoothingEnabled = false;
-    magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
-    console.log("Mag image posted")
-  }
 }
 
 //Get the size of the parentNode which is subject to flexbox. Fit the square by making sure the dimensions are based on the smaller of the width and height.
@@ -203,20 +164,11 @@ function initializeOnScreenCanvas() {
 //Resize the canvas if the window is resized
 function flexCanvasSize() {
   initializeOnScreenCanvas();
-  renderBoth(false);
+  renderImage();
+  renderContoursImage();
 }
 
-//Add event listeners for canvas resizing
-canvasWidthInput.addEventListener('change', e => {
-  offScreenCVS.width = e.target.value;
-  initializeOnScreenCanvas();
-  resetOffScreenCVS();
-});
-canvasHeightInput.addEventListener('change', e => {
-  offScreenCVS.height = e.target.value;
-  initializeOnScreenCanvas();
-  resetOffScreenCVS();
-});
+window.onresize = flexCanvasSize;
 
 //====================================//
 //========= * * * Reset * * * ========//
@@ -225,6 +177,8 @@ canvasHeightInput.addEventListener('change', e => {
 //Provide image reset functionality
 clearBtn.addEventListener('click', e => {
   resetOffScreenCVS();
+  findContours();
+  renderContoursImage();
 });
 
 function resetOffScreenCVS() {
@@ -234,7 +188,7 @@ function resetOffScreenCVS() {
   redoStack = [];
   points = [];
   source = offScreenCVS.toDataURL();
-  renderBoth(true);
+  renderImage();
 }
 
 //====================================//
@@ -271,7 +225,9 @@ function actionUndoRedo(pushStack, popStack) {
   offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
   redrawPoints();
   source = offScreenCVS.toDataURL();
-  renderBoth(true);
+  renderImage();
+  findContours();
+  renderContoursImage();
 }
 
 function redrawPoints() {
@@ -333,10 +289,6 @@ lineWidthInput.addEventListener('change', e => {
   lineWidth = e.target.value;
 });
 
-dwThicknessInput.addEventListener('change', e => {
-  dwThickness = 2*Math.round(e.target.value/2) + 1;
-});
-
 function handleMouseMove(e) {
   if (clicked) {
     //Action-based
@@ -353,7 +305,6 @@ function handleMouseDown(e) {
   firstX = Math.floor(e.offsetX / ratio);
   firstY = Math.floor(e.offsetY / ratio);
   actionDraw(e);
-  state.drawingDone = false;
 }
 
 function handleMouseUp() {
@@ -363,7 +314,8 @@ function handleMouseUp() {
   points = [];
   //Reset redostack
   redoStack = [];
-  renderMagImage(true);
+  findContours();
+  renderContoursImage();
 }
 
 //Action functions
@@ -414,71 +366,74 @@ function actionDraw(e) {
 //======== * * * OpenCV * * * ========//
 //====================================//
 
-let cvsource_init = false;
-
-async function startOpenCV() {
-  await waitFor(_ => cvloaded === true);
-  initializeMats();
-  await waitFor(_ => cvsource_init === true);
-  renderMagImage();
-  window.onresize = flexCanvasSize;
-}
-
-function initializeMats() {
-  mats.cvsource = cv.imread(img);
-  mats.mx = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
-  mats.my = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
-  mats.mz = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
-  cvsource_init = true;
-}
+let contoursImg = new Image();
+let contoursSource = offScreenCVS.toDataURL();
+findContours();
+renderContoursImage();
 
 function findContours() {
-  // read source image
-  console.log("Canvas loaded in OpenCV format...");
-  // preprocess image
-  cv.cvtColor(mats.cvsource, mats.cvsource, cv.COLOR_RGBA2GRAY, 0);
-  cv.threshold(mats.cvsource, mats.cvsource, 120, 200, cv.THRESH_BINARY);
-  console.log("Image filtered...");
-  // find contours
-  hierarchy = new cv.Mat();
-  cv.findContours(mats.cvsource, mats.contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-  console.log("Contours found!");
+  if (cvloaded === false) {
+    console.log('Waiting for OpenCV to load...');
+  } else if (cvloaded ===true) {
+    // read source image
+    let cvsource = cv.imread(img);
+    console.log("Image loaded in OpenCV format...");
+    // initialize matrix objects
+    let dst = cv.Mat.zeros(cvsource.rows,cvsource.cols,cv.CV_8UC3);
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    console.log("Matrices initialized...");
+    // preprocess image
+    cv.cvtColor(cvsource, cvsource, cv.COLOR_RGBA2GRAY, 0);
+    cv.threshold(cvsource, cvsource, 120, 200, cv.THRESH_BINARY);
+    console.log("Image filtered...");
+    // find contours
+    cv.findContours(cvsource, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+    console.log("Contours found!");
+    // draw contours onto dst matrix
+    for (let i = 0; i < contours.size(); ++i) {
+      let color = new cv.Scalar(Math.round(Math.random() * 255), Math.round(Math.random() * 255),
+                                Math.round(Math.random() * 255));
+      cv.drawContours(dst, contours, i, color, 5, cv.LINE_8, hierarchy, 100);
+    }
 
-  hierarchy.delete();
+    contoursSource = imageDataToDataURL(matToImageData(dst));
+    cvsource.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+  }
 }
 
-function matToImageData(mat, coolwarm = true) {
-  let rgbaMat = new cv.Mat();
-  if (coolwarm === false) {
-    // Convert the Mat to RGBA
-    cv.cvtColor(mat, rgbaMat, cv.COLOR_RGB2RGBA);
-  } else if (coolwarm === true) {
-    // Apply the coolwarm colormap
-    let rgbMat = new cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_8UC3);
-    for (let row = 0; row < mat.rows; row++) {
-      for (let col = 0; col < mat.cols; col++) {
-        let matVal = 255 - mat.data[row * mat.cols * mat.channels() + col * mat.channels()];
-        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1)] = red[Math.round(matVal)];
-        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1) + 1] = green[Math.round(matVal)];
-        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1) + 2] = blue[Math.round(matVal)];
-      }
-    }
-    // Convert the Mat to RGBA
-    cv.cvtColor(rgbMat, rgbaMat, cv.COLOR_RGB2RGBA);
+//Once the image is loaded, draw the image onto the onscreen canvas.
+function renderContoursImage() {
+  contoursImg.src = contoursSource;
+  contoursImg.onload = () => {
+    //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
+    contoursCVS.width = baseDimensionX;
+    contoursCVS.height = baseDimensionY;
+    //Prevent blurring
+    contoursCTX.imageSmoothingEnabled = false;
+    contoursCTX.drawImage(contoursImg, 0, 0, contoursCVS.width, contoursCVS.height);
+  };
+}
 
-    rgbMat.delete()
+function matToImageData(mat) {
+  if (cvloaded === false) {
+    console.log('Waiting for OpenCV to load...');
+  } else if (cvloaded === true) {
+    // Convert the Mat to RGBA
+    let rgbaMat = new cv.Mat();
+    cv.cvtColor(mat, rgbaMat, cv.COLOR_BGR2RGBA);
+
+    // Create ImageData from the cv.Mat
+    let imgData = new ImageData(
+      new Uint8ClampedArray(rgbaMat.data),
+      rgbaMat.cols,
+      rgbaMat.rows
+    );
+
+    // Free memory
+    rgbaMat.delete();
+    return imgData
   }
-
-  // Create ImageData from the cv.Mat
-  let imgData = new ImageData(
-    new Uint8ClampedArray(rgbaMat.data),
-    rgbaMat.cols,
-    rgbaMat.rows
-  );
-
-  // Free memory
-  rgbaMat.delete();
-  return imgData
 }
 
 function imageDataToDataURL(imageData) {
@@ -503,31 +458,3 @@ function imageDataToDataURL(imageData) {
 //==== * * * Magnetization * * * =====//
 //====================================//
 
-async function drawMagSource() {
-  let previewMz = await generatePreviewMz();
-  return imageDataToDataURL(matToImageData( previewMz ));
-}
-
-async function generatePreviewMz() {
-  await waitFor(_ => state.drawingDone === true)
-  mats.cvsource = cv.imread(img);
-  mats.output = new cv.Mat();
-  let ksize = new cv.Size(dwThickness, dwThickness);
-  cv.GaussianBlur(mats.cvsource, mats.output, ksize, 0, 0, cv.BORDER_WRAP);
-  return mats.output;
-}
-
-function generateMz() {
-
-}
-
-function generateMy() {
-
-}
-
-function generateMx() {
-
-}
-
-// use this line to convert cv.Mat to image
-// imageSource = imageDataToDataURL(matToImageData( src ));
