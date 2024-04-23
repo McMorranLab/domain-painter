@@ -140,12 +140,13 @@ renderImage();
 startOpenCV();
 
 async function renderBoth(redraw = true) {
+  state.updatingDone = false;
   renderImage();
   renderMagImage(redraw);
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
-function renderImage() {
+async function renderImage() {
   img.src = source;
   img.onload = () => {
     //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
@@ -154,7 +155,7 @@ function renderImage() {
     //Prevent blurring
     onScreenCTX.imageSmoothingEnabled = false;
     onScreenCTX.drawImage(img, 0, 0, onScreenCVS.width, onScreenCVS.height);
-    state.drawingDone = true;
+    state.updatingDone = true;
     console.log("Normal image drawn")
   };
 }
@@ -353,7 +354,6 @@ function handleMouseDown(e) {
   firstX = Math.floor(e.offsetX / ratio);
   firstY = Math.floor(e.offsetY / ratio);
   actionDraw(e);
-  state.drawingDone = false;
 }
 
 function handleMouseUp() {
@@ -509,7 +509,7 @@ async function drawMagSource() {
 }
 
 async function generatePreviewMz() {
-  await waitFor(_ => state.drawingDone === true)
+  await waitFor(_ => state.updatingDone === true)
   mats.cvsource = cv.imread(img);
   mats.output = new cv.Mat();
   let ksize = new cv.Size(dwThickness, dwThickness);
