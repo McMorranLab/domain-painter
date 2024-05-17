@@ -1,7 +1,26 @@
-//import { red, green, blue } from "./coolwarm.js"
-import { state, mats, waitFor, drawArrow } from "./helpers.js"
-import { onScreenCVS,onScreenCTX,offScreenCVS,offScreenCTX,magCVS,magCTX } from "./canvas.js"
-import { dwAngleGenerator, findContours, matToImageData, imageDataToDataURL} from "./opencv_helpers.js"
+import { red, green, blue } from "./coolwarm.js"
+
+//====================================//
+//======= * * * Canvas * * * =========//
+//====================================//
+
+//Create an onscreen canvas. This is what the user sees and interacts with.
+const onScreenCVS = document.getElementById("onScreen");
+const onScreenCTX = onScreenCVS.getContext("2d", {willReadFrequently: true,});
+
+//Create an offscreen canvas. This is where we will actually be drawing, in order to keep the image consistent and free of distortions.
+let offScreenCVS = document.createElement("canvas");
+let offScreenCTX = offScreenCVS.getContext("2d");
+//Set the dimensions of the drawing canvas
+offScreenCVS.width = 1024;
+offScreenCVS.height = 1024;
+offScreenCTX.fillStyle = 'white';
+offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
+let canvasAspectRatio = offScreenCVS.height/offScreenCVS.width
+
+//Create a canvas for the magnetization produced by the script
+const magCVS = document.getElementById("contourDisplay");
+const magCTX = magCVS.getContext("2d", {willReadFrequently: true,});
 
 //====================================//
 //======= * * * Toolbar * * * ========//
@@ -80,6 +99,27 @@ const tools = {
 };
 
 //====================================//
+//======== * * * State * * * =========//
+//====================================//
+
+// OpenCV global Matrices and MatrixVectors library
+let mats = {};
+let state = {
+  drawingDone: true
+};
+
+// useful function for async behavior
+function waitFor(conditionFunction) {
+
+  const poll = resolve => {
+    if(conditionFunction()) resolve();
+    else setTimeout(_ => poll(resolve), 100);
+  }
+
+  return new Promise(poll);
+}
+
+//====================================//
 //======= * * * Rendering * * * ======//
 //====================================//
 
@@ -96,12 +136,13 @@ let img = new Image();
 let source = offScreenCVS.toDataURL();
 let magImg = new Image();
 let magSource = offScreenCVS.toDataURL();
+renderImage();
 startOpenCV();
 
-async function renderBoth(redraw = true, blur = true) {
+async function renderBoth(redraw = true) {
   state.updatingDone = false;
   renderImage();
-  renderMagImage(redraw,blur);
+  renderMagImage(redraw);
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
@@ -114,14 +155,15 @@ async function renderImage() {
     //Prevent blurring
     onScreenCTX.imageSmoothingEnabled = false;
     onScreenCTX.drawImage(img, 0, 0, onScreenCVS.width, onScreenCVS.height);
+    mats.cvsource = cv.imread(img);
     state.updatingDone = true;
   };
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
-async function renderMagImage(redraw = true, blur = true) {
+async function renderMagImage(redraw = true) {
   if (redraw === true) {
-    magSource = await drawMagSource(blur);
+    magSource = await drawMagSource();
     magImg.src = magSource;
     magImg.onload = () => {
       //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
@@ -130,10 +172,9 @@ async function renderMagImage(redraw = true, blur = true) {
       //Prevent blurring
       magCTX.imageSmoothingEnabled = false;
       magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
-      generatePreviewArrows();
       console.log("Mag image posted")
     };
-  } else if (redraw === false) {
+  } else {
     //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
     magCVS.width = baseDimensionX;
     magCVS.height = baseDimensionY;
@@ -163,7 +204,7 @@ function initializeOnScreenCanvas() {
 //Resize the canvas if the window is resized
 function flexCanvasSize() {
   initializeOnScreenCanvas();
-  renderBoth(false, false);
+  renderBoth(false);
 }
 
 //Add event listeners for canvas resizing
@@ -194,7 +235,7 @@ function resetOffScreenCVS() {
   redoStack = [];
   points = [];
   source = offScreenCVS.toDataURL();
-  renderBoth(true, false); // set to redraw true and redrawArrows true when domain wall rendering is finished
+  renderBoth(true);
 }
 
 //====================================//
@@ -231,7 +272,7 @@ function actionUndoRedo(pushStack, popStack) {
   offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
   redrawPoints();
   source = offScreenCVS.toDataURL();
-  renderBoth(true, true);
+  renderBoth(true);
 }
 
 function redrawPoints() {
@@ -295,7 +336,6 @@ lineWidthInput.addEventListener('change', e => {
 
 dwThicknessInput.addEventListener('change', e => {
   dwThickness = 2*Math.round(e.target.value/2) + 1;
-  mats.ksize = new cv.Size(dwThickness, dwThickness);
 });
 
 function handleMouseMove(e) {
@@ -323,7 +363,7 @@ function handleMouseUp() {
   points = [];
   //Reset redostack
   redoStack = [];
-  renderBoth(true, true); // change to true, true when domain wall rendering is finished
+  renderMagImage(true);
 }
 
 //Action functions
@@ -332,17 +372,23 @@ function actionDraw(e) {
   let mouseX = Math.floor(e.offsetX / ratio);
   let mouseY = Math.floor(e.offsetY / ratio);
   // draw
-  offScreenCTX.lineWidth = lineWidth;
-  offScreenCTX.lineCap = 'round';
   if (isDrawing === true) {
     offScreenCTX.strokeStyle = "black";
+    offScreenCTX.lineWidth = lineWidth;
+    offScreenCTX.lineCap = 'round';
+    offScreenCTX.beginPath();
+    offScreenCTX.moveTo(firstX,firstY)
+    offScreenCTX.lineTo(mouseX,mouseY);
+    offScreenCTX.stroke();
   } else if (isErasing ===true) {
     offScreenCTX.strokeStyle = "white";
+    offScreenCTX.lineWidth = lineWidth;
+    offScreenCTX.lineCap = 'round';
+    offScreenCTX.beginPath();
+    offScreenCTX.moveTo(firstX,firstY)
+    offScreenCTX.lineTo(mouseX,mouseY);
+    offScreenCTX.stroke();
   }
-  offScreenCTX.beginPath();
-  offScreenCTX.moveTo(firstX,firstY)
-  offScreenCTX.lineTo(mouseX,mouseY);
-  offScreenCTX.stroke();
 
   if (lastX !== mouseX || lastY !== mouseY) {
     points.push({
@@ -368,50 +414,119 @@ function actionDraw(e) {
 //======== * * * OpenCV * * * ========//
 //====================================//
 
+let cvsource_init = false;
+
 async function startOpenCV() {
-  source = offScreenCVS.toDataURL();
   await waitFor(_ => cvloaded === true);
-  mats.ksize = new cv.Size(dwThickness, dwThickness);
-  mats.mz = new cv.Mat();
-  mats.hierarchy = new cv.Mat();
-  renderBoth(false, false);
+  initializeMats();
+  await waitFor(_ => cvsource_init === true);
+  renderMagImage();
   window.onresize = flexCanvasSize;
+}
+
+function initializeMats() {
+  mats.cvsource = cv.imread(img);
+  mats.mx = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
+  mats.my = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
+  mats.mz = cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_32FC1);
+  cvsource_init = true;
+}
+
+async function findContours() {
+  await waitFor(_ => state.updatingDone === true)
+  // read source image
+  console.log("Canvas loaded in OpenCV format...");
+  // preprocess image
+  cv.cvtColor(mats.cvsource, mats.cvsource, cv.COLOR_RGBA2GRAY, 0);
+  cv.threshold(mats.cvsource, mats.cvsource, 120, 200, cv.THRESH_BINARY);
+  console.log("Image filtered...");
+  // find contours
+  hierarchy = new cv.Mat();
+  cv.findContours(mats.cvsource, mats.contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+  console.log("Contours found!");
+
+  hierarchy.delete();
+}
+
+function matToImageData(mat, coolwarm = true) {
+  let rgbaMat = new cv.Mat();
+  if (coolwarm === false) {
+    // Convert the Mat to RGBA
+    cv.cvtColor(mat, rgbaMat, cv.COLOR_RGB2RGBA);
+  } else if (coolwarm === true) {
+    // Apply the coolwarm colormap
+    let rgbMat = new cv.Mat.zeros(mats.cvsource.rows,mats.cvsource.cols,cv.CV_8UC3);
+    for (let row = 0; row < mat.rows; row++) {
+      for (let col = 0; col < mat.cols; col++) {
+        let matVal = 255 - mat.data[row * mat.cols * mat.channels() + col * mat.channels()];
+        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1)] = red[Math.round(matVal)];
+        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1) + 1] = green[Math.round(matVal)];
+        rgbMat.data[row * mat.cols * (mat.channels()-1) + col * (mat.channels()-1) + 2] = blue[Math.round(matVal)];
+      }
+    }
+    // Convert the Mat to RGBA
+    cv.cvtColor(rgbMat, rgbaMat, cv.COLOR_RGB2RGBA);
+
+    rgbMat.delete()
+  }
+
+  // Create ImageData from the cv.Mat
+  let imgData = new ImageData(
+    new Uint8ClampedArray(rgbaMat.data),
+    rgbaMat.cols,
+    rgbaMat.rows
+  );
+
+  // Free memory
+  rgbaMat.delete();
+  return imgData
+}
+
+function imageDataToDataURL(imageData) {
+  // Create a temporary canvas
+  let tempcanvas = document.createElement('canvas');
+  let tempctx = tempcanvas.getContext('2d');
+
+  // Set canvas dimensions
+  tempcanvas.width = imageData.width;
+  tempcanvas.height = imageData.height;
+
+  // Put the ImageData onto the canvas
+  tempctx.putImageData(imageData, 0, 0);
+
+  // Convert canvas to data URL
+  let dataURL = tempcanvas.toDataURL();
+
+  return dataURL
 }
 
 //====================================//
 //==== * * * Magnetization * * * =====//
 //====================================//
 
-async function drawMagSource(blur) {
-  let mz = await generateMz(blur);
-  return imageDataToDataURL(matToImageData( mz ));
+async function drawMagSource() {
+  let previewMz = await generatePreviewMz();
+  return imageDataToDataURL(matToImageData( previewMz ));
 }
 
-async function generateMz(blur) {
+async function generatePreviewMz() {
   await waitFor(_ => state.updatingDone === true)
-  mats.cvsource = cv.imread(img);
-  if (blur === true) {
-    cv.GaussianBlur(mats.cvsource, mats.mz, mats.ksize, 0, 0, cv.BORDER_WRAP);
-  } else if (blur === false) {
-    mats.mz = mats.cvsource;
-  }
-  return mats.mz;
+  mats.output = new cv.Mat();
+  let ksize = new cv.Size(dwThickness, dwThickness);
+  cv.GaussianBlur(mats.cvsource, mats.output, ksize, 0, 0, cv.BORDER_WRAP);
+  return mats.output;
 }
 
-async function generatePreviewArrows(stride = 20) {
-  let ratioX = offScreenCVS.width / onScreenCVS.width;
-  let ratioY = offScreenCVS.height / onScreenCVS.height;
-  await waitFor(_ => cvloaded === true);
-  mats.contours = await findContours(mats.cvsource,cv.CHAIN_APPROX_NONE);
-  console.log("Number of contours (excluding border): "+state.contour_number_noborder);
-  for (var i = 1; i < mats.contours.size(); i++) {
-    console.log("test", i)
-    var xyAng = await dwAngleGenerator(mats.contours.get(i));
-    console.log(xyAng.length);
-    for (var j = 0; j < xyAng.length; j+=stride) {
-      drawArrow(magCTX,xyAng[j][0]/ratioX,xyAng[j][1]/ratioY,stride/2,stride/4,xyAng[j][2]);
-    }
-  }
+function generateMz() {
+
+}
+
+function generateMy() {
+
+}
+
+function generateMx() {
+
 }
 
 // use this line to convert cv.Mat to image
