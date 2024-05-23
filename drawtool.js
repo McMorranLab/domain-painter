@@ -1,7 +1,7 @@
 //import { red, green, blue } from "./coolwarm.js"
 import { state, mats, waitFor, drawArrow } from "./helpers.js"
 import { onScreenCVS,onScreenCTX,offScreenCVS,offScreenCTX,magCVS,magCTX } from "./canvas.js"
-import { dwAngleGenerator, findContours, matToImageData, imageDataToDataURL} from "./opencv_helpers.js"
+import { dwAngleGenerator, findContours, findClosestContour, findClosestPoint, matToImageData, imageDataToDataURL} from "./opencv_helpers.js"
 
 //====================================//
 //======= * * * Toolbar * * * ========//
@@ -13,27 +13,29 @@ const canvasHeightInput = document.getElementById("canvasHeightInput");
 // * All tool buttons * //
 const toolBtns = document.querySelectorAll('.toolBtn');
 let toolBtnImg = document.getElementById('pantoolImg');
-// * Pan button * //
-const panBtn = document.getElementById("pantool")
 // * Undo buttons * //
-const undoBtn = document.getElementById("undo")
-const redoBtn = document.getElementById("redo")
+const undoBtn = document.getElementById("undo");
+const redoBtn = document.getElementById("redo");
 // * Reset buttons * //
-const clearBtn = document.getElementById("clear")
+const clearBtn = document.getElementById("clear");
 // * Zoom buttons * //
-const zoomInBtn = document.getElementById("zoomIn")
-const zoomOutBtn = document.getElementById("zoomOut")
+//const zoomInBtn = document.getElementById("zoomIn")
+//const zoomOutBtn = document.getElementById("zoomOut")
+// * Pan button * //
+//const panBtn = document.getElementById("pantool")
 // * Drawing * //
-const drawBtn = document.getElementById("drawtool")
-const eraseBtn = document.getElementById("erasetool")
+const drawBtn = document.getElementById("drawtool");
+const eraseBtn = document.getElementById("erasetool");
+const chiralityBtn = document.getElementById("chiralitytool");
+const bpBtn = document.getElementById("bptool");
 // * Line Width * //
-const lineWidthInput = document.getElementById("lineWidth")
+const lineWidthInput = document.getElementById("lineWidth");
 let lineWidth = 32;
 // * Domain Wall Width * //
-const dwThicknessInput = document.getElementById("dwThickness")
+const dwThicknessInput = document.getElementById("dwThickness");
 let dwThickness = 31;
 // * Placing Blochlines * //
-const placeBlochlineBtn = document.getElementById("bltool")
+const placeBlochlineBtn = document.getElementById("bltool");
 
 const tools = {
   pantool: {
@@ -98,10 +100,10 @@ let magImg = new Image();
 let magSource = offScreenCVS.toDataURL();
 startOpenCV();
 
-async function renderBoth(redraw = true, blur = true) {
+async function renderBoth(redrawMz = true, redrawMxy = true, blur = true) {
   state.updatingDone = false;
   renderImage();
-  renderMagImage(redraw,blur);
+  renderMagImage(redrawMz,redrawMxy,blur);
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
@@ -111,6 +113,8 @@ async function renderImage() {
     //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
     onScreenCVS.width = baseDimensionX;
     onScreenCVS.height = baseDimensionY;
+    state.ratioX = onScreenCVS.width / offScreenCVS.width;
+    state.ratioY = onScreenCVS.height / offScreenCVS.height;
     //Prevent blurring
     onScreenCTX.imageSmoothingEnabled = false;
     onScreenCTX.drawImage(img, 0, 0, onScreenCVS.width, onScreenCVS.height);
@@ -119,8 +123,9 @@ async function renderImage() {
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
-async function renderMagImage(redraw = true, blur = true) {
-  if (redraw === true) {
+async function renderMagImage(redrawMz = true, redrawMxy = true, blur = true) {
+  if (redrawMz === true) {
+    generatePreviewArrows();
     magSource = await drawMagSource(blur);
     magImg.src = magSource;
     magImg.onload = () => {
@@ -130,16 +135,21 @@ async function renderMagImage(redraw = true, blur = true) {
       //Prevent blurring
       magCTX.imageSmoothingEnabled = false;
       magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
-      generatePreviewArrows();
+      if (redrawMxy === true) {
+        renderPreviewArrows();
+      }
       console.log("Mag image posted")
     };
-  } else if (redraw === false) {
+  } else if (redrawMz === false) {
     //if the image is being drawn due to resizing, reset the width and height. Putting the width and height outside the img.onload function will make scaling smoother, but the image will flicker as you scale. Pick your poison.
     magCVS.width = baseDimensionX;
     magCVS.height = baseDimensionY;
     //Prevent blurring
     magCTX.imageSmoothingEnabled = false;
     magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
+    if (redrawMxy === true) {
+      renderPreviewArrows();
+    }
     console.log("Mag image posted")
   }
 }
@@ -163,7 +173,9 @@ function initializeOnScreenCanvas() {
 //Resize the canvas if the window is resized
 function flexCanvasSize() {
   initializeOnScreenCanvas();
-  renderBoth(false, false);
+  state.ratioX = onScreenCVS.width / offScreenCVS.width;
+  state.ratioY = onScreenCVS.height / offScreenCVS.height;
+  renderBoth(false, false, false);
 }
 
 //Add event listeners for canvas resizing
@@ -194,7 +206,7 @@ function resetOffScreenCVS() {
   redoStack = [];
   points = [];
   source = offScreenCVS.toDataURL();
-  renderBoth(true, false); // set to redraw true and redrawArrows true when domain wall rendering is finished
+  renderBoth(true, true, false); // set to redraw true and redrawArrows true when domain wall rendering is finished
 }
 
 //====================================//
@@ -231,7 +243,7 @@ function actionUndoRedo(pushStack, popStack) {
   offScreenCTX.fillRect(0, 0, offScreenCVS.width, offScreenCVS.height);
   redrawPoints();
   source = offScreenCVS.toDataURL();
-  renderBoth(true, true);
+  renderBoth(true, true, true);
 }
 
 function redrawPoints() {
@@ -268,25 +280,35 @@ onScreenCVS.addEventListener("mouseup", handleMouseUp);
 let clicked = false;
 let isDrawing = true;
 let isErasing = false;
-let isPanning = false;
+let isFlipping = false;
+let isPlacingBP = false;
 
 drawBtn.addEventListener('click', e => {
   isDrawing = true;
   isErasing = false;
-  isPanning = false;
-
+  isFlipping = false;
+  isPlacingBP = false;
 });
 
 eraseBtn.addEventListener('click', e => {
   isDrawing = false;
   isErasing = true;
-  isPanning = false;
+  isFlipping = false;
+  isPlacingBP = false;
 });
 
-panBtn.addEventListener('click', e => {
+chiralityBtn.addEventListener('click', e => {
   isDrawing = false;
   isErasing = false;
-  isPanning = true;
+  isFlipping = true;
+  isPlacingBP = false;
+});
+
+bpBtn.addEventListener('click', e => {
+  isDrawing = false;
+  isErasing = false;
+  isFlipping = false;
+  isPlacingBP = true;
 });
 
 lineWidthInput.addEventListener('change', e => {
@@ -300,37 +322,39 @@ dwThicknessInput.addEventListener('change', e => {
 
 function handleMouseMove(e) {
   if (clicked) {
-    //Action-based
     actionDraw(e);
-    //Image-based
-    // draw(e)
   }
 }
 
 function handleMouseDown(e) {
-  clicked = true;
-  //Action-based
-  let ratio = onScreenCVS.width / offScreenCVS.width;
-  firstX = Math.floor(e.offsetX / ratio);
-  firstY = Math.floor(e.offsetY / ratio);
-  actionDraw(e);
+  if (isDrawing === true || isErasing === true) {
+    clicked = true;
+    //Action-based
+    firstX = Math.floor(e.offsetX / state.ratioX);
+    firstY = Math.floor(e.offsetY / state.rationY);
+    actionDraw(e);
+  }
+  if (isFlipping === true) {
+    flipChirality(e);
+  }
 }
 
 function handleMouseUp() {
-  clicked = false;
-  //Action-based
-  undoStack.push(points);
-  points = [];
-  //Reset redostack
-  redoStack = [];
-  renderBoth(true, true); // change to true, true when domain wall rendering is finished
+  if (isDrawing === true || isErasing === true) {
+    clicked = false;
+    //Action-based
+    undoStack.push(points);
+    points = [];
+    //Reset redostack
+    redoStack = [];
+    renderBoth(true, true, true);
+  }
 }
 
 //Action functions
 function actionDraw(e) {
-  let ratio = onScreenCVS.width / offScreenCVS.width;
-  let mouseX = Math.floor(e.offsetX / ratio);
-  let mouseY = Math.floor(e.offsetY / ratio);
+  let mouseX = Math.floor(e.offsetX / state.ratioX);
+  let mouseY = Math.floor(e.offsetY / state.ratioY);
   // draw
   offScreenCTX.lineWidth = lineWidth;
   offScreenCTX.lineCap = 'round';
@@ -374,7 +398,8 @@ async function startOpenCV() {
   mats.ksize = new cv.Size(dwThickness, dwThickness);
   mats.mz = new cv.Mat();
   mats.hierarchy = new cv.Mat();
-  renderBoth(false, false);
+  mats.xyAngs = [];
+  renderBoth(false, false, false);
   window.onresize = flexCanvasSize;
 }
 
@@ -384,6 +409,7 @@ async function startOpenCV() {
 
 async function drawMagSource(blur) {
   let mz = await generateMz(blur);
+  console.log("Mz generated! Posting image...")
   return imageDataToDataURL(matToImageData( mz ));
 }
 
@@ -391,27 +417,49 @@ async function generateMz(blur) {
   await waitFor(_ => state.updatingDone === true)
   mats.cvsource = cv.imread(img);
   if (blur === true) {
+    console.log("Blurring image, this may take a while...")
     cv.GaussianBlur(mats.cvsource, mats.mz, mats.ksize, 0, 0, cv.BORDER_WRAP);
   } else if (blur === false) {
+    console.log("Skipped gaussian blur...")
     mats.mz = mats.cvsource;
   }
   return mats.mz;
 }
 
 async function generatePreviewArrows(stride = 20) {
-  let ratioX = offScreenCVS.width / onScreenCVS.width;
-  let ratioY = offScreenCVS.height / onScreenCVS.height;
-  await waitFor(_ => cvloaded === true);
+  await waitFor(_ => state.updatingDone === true)
+  mats.cvsource = cv.imread(img);
   mats.contours = await findContours(mats.cvsource,cv.CHAIN_APPROX_NONE);
-  console.log("Number of contours (excluding border): "+state.contour_number_noborder);
+  mats.xyAngs = [];
+  mats.chirality = [];
+  console.log("Found "+state.contour_number_noborder+" contour(s) (excluding border)");
   for (var i = 1; i < mats.contours.size(); i++) {
-    console.log("test", i)
     var xyAng = await dwAngleGenerator(mats.contours.get(i));
-    console.log(xyAng.length);
+    mats.xyAngs.push(xyAng);
+    mats.chirality.push(new Array(xyAng.length).fill(0));
+    console.log("Contour "+i+": "+xyAng.length+" pxs");
+  }
+}
+
+async function renderPreviewArrows(stride = 20) {
+  for (var i = 0; i < mats.xyAngs.length; i++) {
+    let xyAng = mats.xyAngs[i];
+    console.log("Drawing arrows for contour "+i)
     for (var j = 0; j < xyAng.length; j+=stride) {
-      drawArrow(magCTX,xyAng[j][0]/ratioX,xyAng[j][1]/ratioY,stride/2,stride/4,xyAng[j][2]);
+      drawArrow(magCTX,xyAng[j][0]*state.ratioX,xyAng[j][1]*state.ratioY,
+                stride/2,stride/4, xyAng[j][2] + Math.PI*mats.chirality[i][j]);
     }
   }
+}
+
+async function flipChirality(e) {
+  let mouseX = Math.floor(e.offsetX / state.ratioX);
+  let mouseY = Math.floor(e.offsetY / state.ratioY);
+  let targetContourIndex = findClosestContour(mouseX,mouseY) - 1;
+  for (var i = 0; i < mats.xyAngs[targetContourIndex].length; i++) {
+    mats.chirality[targetContourIndex][i] = (mats.chirality[targetContourIndex][i]+1)%2;
+  }
+  renderBoth(false,true);
 }
 
 // use this line to convert cv.Mat to image
