@@ -3,15 +3,7 @@ import { offScreenCVS } from "./canvas.js"
 import { red, green, blue } from "./coolwarm.js"
 
 export async function dwAngleGenerator(contour,stride) {
-    let pointX;
-    let pointAx;
-    let pointBx;
-    let pointY;
-    let pointAy;
-    let pointBy;
-    let j;
-    let k;
-    let ang;
+    let pointX; let pointAx; let pointBx; let pointY; let pointAy; let pointBy; let j; let k; let ang;
     let xyAng = [];
     let lastX = contour.data32S[0];
     let lastY = contour.data32S[1];
@@ -28,17 +20,17 @@ export async function dwAngleGenerator(contour,stride) {
         
         if (i === 0) {
             j = contour.rows - 1;
-            console.log(j);
+            //console.log(j);
         } else {
             j = i - 1;
-            console.log(j);
+            //console.log(j);
         }
         if (i === contour.rows - 1) {
             k = 0;
-            console.log(k);
+            //console.log(k);
         } else {
             k = i + 1;
-            console.log(k);
+            //console.log(k);
         }
 
         pointAx = contour.data32S[j * 2];
@@ -63,8 +55,8 @@ export async function findContours(mat, method = cv.CHAIN_APPROX_SIMPLE) {
     // find contours
     await cv.findContours(cloneMat, contours, hierarchy, cv.RETR_CCOMP, method);
     console.log("Contours found!");
-    cloneMat.delete(); //hierarchy.delete();
-    mats.hierarchy = hierarchy;
+    cloneMat.delete(); hierarchy.delete();
+    //mats.hierarchy = hierarchy;
     contours = await fixBoundaryContour(contours);
     return contours;
 }
@@ -190,4 +182,41 @@ export function imageDataToDataURL(imageData) {
     let dataURL = tempcanvas.toDataURL();
 
     return dataURL
+}
+
+export function findClosestContour(pointX, pointY) {
+    let contourIndex;
+    let dist;
+    let smallestDist = Infinity;
+    for (var i = 1; i < mats.contours.size(); i++) {
+        dist = cv.pointPolygonTest(mats.contours.get(i), new cv.Point(pointX, pointY), true);
+        if (Math.abs(dist) < smallestDist) {
+            smallestDist = Math.abs(dist);
+            contourIndex = i;
+        }
+    }
+    return contourIndex;
+}
+
+export function findClosestPoint(contour, pointX, pointY) {
+    let closestPointX;
+    let closestPointY;
+    let contourPointX;
+    let contourPointY;
+    let dist;
+    let smallestDist = Infinity;
+    for (let i = 0; i < contour.data32S.length / 2; i++) {
+        contourPointX = contour.data32S[i*2];
+        contourPointY = contour.data32S[i*2 + 1];
+        dist = Math.sqrt(
+            Math.pow((contourPointX - pointX), 2) +
+            Math.pow((contourPointY - pointY), 2)
+        );
+        if (dist < smallestDist) {
+            smallestDist = dist;
+            closestPointX = contourPointX;
+            closestPointY = contourPointY;
+        }
+    }
+    return [closestPointX, closestPointY];
 }

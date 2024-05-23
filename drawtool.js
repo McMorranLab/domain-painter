@@ -318,6 +318,7 @@ lineWidthInput.addEventListener('change', e => {
 dwThicknessInput.addEventListener('change', e => {
   dwThickness = 2*Math.round(e.target.value/2) + 1;
   mats.ksize = new cv.Size(dwThickness, dwThickness);
+  renderBoth(true,true,true);
 });
 
 function handleMouseMove(e) {
