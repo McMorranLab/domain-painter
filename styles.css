@@ -97,21 +97,6 @@ h2 {
     background-color: white;
 }
 
-.checkboxcontainer
-{
-    display: flex;
-    flex-direction: row;
-}
-
-input[type=checkbox] {
-    float: left;
-    scale: 50%;
-}
-
-label[for="neelcaps"]{
-    display: inline;
-}
-
 #workspace {
     width: 100%;
     height: 100%;

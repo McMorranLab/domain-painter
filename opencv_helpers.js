@@ -2,35 +2,45 @@ import { state, mats } from "./helpers.js"
 import { offScreenCVS } from "./canvas.js"
 import { red, green, blue } from "./coolwarm.js"
 
-export async function dwAngleGenerator(contour,stride) {
-    let pointX; let pointAx; let pointBx; let pointY; let pointAy; let pointBy; let j; let k; let ang;
+export async function dwAngleGenerator(contour, stride = state.stride) {
+    let point; let pointAx; let pointBx; let pointAy; let pointBy; let j; let k; let ang;
     let xyAng = [];
     let lastX = contour.data32S[0];
     let lastY = contour.data32S[1];
+
     for (let i = 0; i < contour.rows; i++) {
-        pointX = contour.data32S[i * 2];
-        pointY = contour.data32S[i * 2 + 1];
-        
-        if ((Math.sqrt((pointX-lastX)**2+(pointY-lastY)**2) < stride) && (i !== 0)) {
+        point = new cv.Point(contour.data32S[i * 2], contour.data32S[i * 2 + 1]);
+        if ((Math.sqrt((point.x-lastX)**2+(point.y-lastY)**2) < stride) && (i !== 0)) {
             continue;
         } else {
-            lastX = pointX;
-            lastY = pointY;
+            lastX = point.x;
+            lastY = point.y;
         }
         
-        if (i === 0) {
-            j = contour.rows - 1;
-            //console.log(j);
+        if (state.PBC === true && checkEdgePoint(point) === true) {
+            if (i === 0) {
+                j = i;
+                k = i + 1;
+            }
+            if (i === contour.rows - 1) {
+                j = i - 1;
+                k = i;
+            }
         } else {
-            j = i - 1;
-            //console.log(j);
-        }
-        if (i === contour.rows - 1) {
-            k = 0;
-            //console.log(k);
-        } else {
-            k = i + 1;
-            //console.log(k);
+            if (i === 0) {
+                j = contour.rows - 1;
+                //console.log(j);
+            } else {
+                j = i - 1;
+                //console.log(j);
+            }
+            if (i === contour.rows - 1) {
+                k = 0;
+                //console.log(k);
+            } else {
+                k = i + 1;
+                //console.log(k);
+            }
         }
 
         pointAx = contour.data32S[j * 2];
@@ -38,91 +48,60 @@ export async function dwAngleGenerator(contour,stride) {
         pointBx = contour.data32S[k * 2];
         pointBy = contour.data32S[k * 2 + 1];
         ang = Math.atan2((pointBy-pointAy),(pointBx-pointAx));
-        xyAng.push([pointX,pointY,ang])
+        //console.log([point.x,point.y,ang])
+        xyAng.push([point.x,point.y,ang])
     }
     return xyAng;
 }
 
 export async function findContours(mat, method = cv.CHAIN_APPROX_SIMPLE) {
-    console.log("Finding contours...");
+    //console.log("Finding contours...");
     // preprocess image
     let cloneMat = mat.clone();
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
     cv.cvtColor(cloneMat, cloneMat, cv.COLOR_RGBA2GRAY, 0);
-    cv.threshold(cloneMat, cloneMat, 120, 200, cv.THRESH_BINARY);
-    console.log("Image filtered...");
+    // invert colors to minimize border cutting
+    cv.threshold(cloneMat, cloneMat, 120, 200, cv.THRESH_BINARY_INV);
+    //console.log("Image filtered...");
+    
     // find contours
     await cv.findContours(cloneMat, contours, hierarchy, cv.RETR_CCOMP, method);
-    console.log("Contours found!");
+    //console.log("Contours found!");
     cloneMat.delete(); hierarchy.delete();
     //mats.hierarchy = hierarchy;
+    
+    // cut borders from contours
     contours = await fixBoundaryContour(contours);
+    state.contour_number_noborder = contours.size();
     return contours;
 }
 
 async function fixBoundaryContour(contours) {
-    let boundaryContour = contours.get(0);
-    let firstPoint = new cv.Point(boundaryContour.data32S[0], boundaryContour.data32S[1]);
-    let startedOnEdge = checkEdgePoint(firstPoint);
-    let firstContourRear = [];
-    let points = [];
+    let newContours = new cv.MatVector();
+    let borderContourIndices = [];
+    let testContour;
+    let boundingRect;
 
-    if (startedOnEdge === true) {
-        for (let i = 0; i < boundaryContour.rows; i++) {
-            let startPoint = new cv.Point(boundaryContour.data32S[i * 2], boundaryContour.data32S[i * 2 + 1]);
-            let endPoint = new cv.Point(boundaryContour.data32S[i * 2 + 2], boundaryContour.data32S[i * 2 + 3]);
-            if ((checkEdgePoint(startPoint) === true && checkEdgePoint(endPoint) === false)
-            || (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false)) {
-                points.push([startPoint.x,startPoint.y]);
-                //console.log([startPoint.x,startPoint.y])
-            } else if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
-                points.push([startPoint.x,startPoint.y]);
-                points.push([endPoint.x,endPoint.y]);
-                //console.log([startPoint.x,startPoint.y])
-                let newcontour = cv.matFromArray(1, points.length, cv.CV_32SC2, points.flat(2));
-                contours.push_back(newcontour);
-                console.log("Cut a contour from border")
-                points = [];
-            }
-        }
-    } else if (startedOnEdge === false) {
-        let stillFirstContour = true;
-        for (let i = 0; i < boundaryContour.rows; i++) {
-            let startPoint = new cv.Point(boundaryContour.data32S[i * 2], boundaryContour.data32S[i * 2 + 1]);
-            let endPoint = new cv.Point(boundaryContour.data32S[i * 2 + 2], boundaryContour.data32S[i * 2 + 3]);
-            if (stillFirstContour === true) {
-                if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false) {
-                    firstContourRear.push([startPoint.x,startPoint.y]);
-                } else if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
-                    firstContourRear.push([startPoint.x,startPoint.y]);
-                    firstContourRear.push([endPoint.x,endPoint.y]);
-                    stillFirstContour = false;
-                }
-            } else if (stillFirstContour === false) {
-                if ((checkEdgePoint(startPoint) === true && checkEdgePoint(endPoint) === false)
-                || (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false)) {
-                    points.push([startPoint.x,startPoint.y]);
-                } else if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
-                    points.push([startPoint.x,startPoint.y]);
-                    points.push([endPoint.x,endPoint.y]);
-                    if (i < (boundaryContour.rows - 1)) {
-                        let newcontour = cv.matFromArray(1, points.length, cv.CV_32SC2, points.flat(2));
-                        contours.push_back(newcontour);
-                        console.log("Cut a contour from border")
-                        points = [];
-                    } else if (i === (boundaryContour.rows - 1)) {
-                        let firstContour = points.concat(firstContourRear);
-                        let newcontour = cv.matFromArray(1, firstContour.length, cv.CV_32SC2, firstContour.flat(2));
-                        contours.push_back(newcontour);
-                        console.log("Cut a contour from border");
-                    }
-                }
-            }
+    for (let i = 0; i < contours.size(); i++) {
+        testContour = contours.get(i);
+        boundingRect = cv.boundingRect(testContour);
+        if (boundingRect.x === 0 || boundingRect.y === 0 ||
+            (boundingRect.x + boundingRect.width) === (offScreenCVS.width) ||
+            (boundingRect.y + boundingRect.height) === (offScreenCVS.height)) {
+            borderContourIndices.push(i);
+            console.log("Contour "+i+" sits on the boundary");
+        } else {
+            newContours.push_back(testContour);
         }
     }
-    state.contour_number_noborder = contours.size()-1;
-    return contours;
+
+    for (let i = 0; i < borderContourIndices.length; i++) {
+        let boundaryContour = contours.get(borderContourIndices[i]);
+        spliceBoundaryContour(boundaryContour,newContours);
+    }
+    contours.delete();
+    return newContours;
 }
 
 function checkEdgePoint(point) {
@@ -130,6 +109,88 @@ function checkEdgePoint(point) {
         return true;
     } else {
         return false;
+    }
+}
+
+function spliceBoundaryContour(boundaryContour, newContours) {
+    let firstPoint = new cv.Point(boundaryContour.data32S[0], boundaryContour.data32S[1]);
+    let startedOnEdge = checkEdgePoint(firstPoint);
+    let stillFirstContour = true;
+    let firstContourRear = [];
+    let points = [];
+
+    for (let i = 0; i < boundaryContour.rows; i++) {
+        let startPoint = new cv.Point(boundaryContour.data32S[i * 2], boundaryContour.data32S[i * 2 + 1]);
+        let endPoint;
+        if (i < boundaryContour.rows - 1){
+            endPoint = new cv.Point(boundaryContour.data32S[i * 2 + 2], boundaryContour.data32S[i * 2 + 3]);
+        } else if (i === boundaryContour.rows - 1) {
+            endPoint = new cv.Point(boundaryContour.data32S[0], boundaryContour.data32S[1]);
+        }
+        //console.log([startPoint.x,startPoint.y,checkEdgePoint(startPoint),endPoint.x,endPoint.y,checkEdgePoint(endPoint)]);
+
+        if (startedOnEdge === true) {
+            if ((checkEdgePoint(startPoint) === true && checkEdgePoint(endPoint) === false)
+            || (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false)) {
+                points.push([startPoint.x,startPoint.y]);
+                //console.log([startPoint.x,startPoint.y]);
+            } else if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
+                points.push([startPoint.x,startPoint.y]);
+                points.push([endPoint.x,endPoint.y]);
+                //console.log([startPoint.x,startPoint.y]);
+                let newcontour = cv.matFromArray(points.length, 1, cv.CV_32SC2, points.flat(2));
+                newContours.push_back(newcontour);
+                console.log("Cut out contour from border (started on edge)")
+                points = [];
+            }
+        } else if (startedOnEdge === false) {
+            if (stillFirstContour === true) {
+                if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false) {
+                    firstContourRear.push([startPoint.x,startPoint.y]);
+                }
+                if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
+                    firstContourRear.push([startPoint.x,startPoint.y]);
+                    firstContourRear.push([endPoint.x,endPoint.y]);
+                    console.log("First contour terminated at pixel "+i);
+                    stillFirstContour = false;
+                }
+            } else if (stillFirstContour === false) {
+                if ((checkEdgePoint(startPoint) === true) && (checkEdgePoint(endPoint) === true)) {
+                    continue;
+                }
+                if (checkEdgePoint(startPoint) === true && checkEdgePoint(endPoint) === false) {
+                    console.log("Found new contour after hitting boundary");
+                    points.push([startPoint.x,startPoint.y]);
+                }
+                if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === false) {
+                    if (i < (boundaryContour.rows - 1)) {
+                        points.push([startPoint.x,startPoint.y]);
+                    } else if (i === (boundaryContour.rows - 1)) {
+                        let firstContour = points.concat(firstContourRear);
+                        let newContour = cv.matFromArray(firstContour.length, 1, cv.CV_32SC2, firstContour.flat(2));
+                        newContours.push_back(newContour);
+                        console.log(firstContour);
+                        console.log("Start and end of first contour cut from border and pieced together");
+                    }
+                }
+                if (checkEdgePoint(startPoint) === false && checkEdgePoint(endPoint) === true) {
+                    points.push([startPoint.x,startPoint.y]);
+                    points.push([endPoint.x,endPoint.y]);
+                    if (i < (boundaryContour.rows - 1)) {
+                        let newContour = cv.matFromArray(points.length, 1, cv.CV_32SC2, points.flat(2));
+                        newContours.push_back(newContour);
+                        console.log("Cut out unique contour from border")
+                        points = [];
+                    } else if (i === (boundaryContour.rows - 1)) {
+                        let firstContour = points.concat(firstContourRear);
+                        let newContour = cv.matFromArray(firstContour.length, 1, cv.CV_32SC2, firstContour.flat(2));
+                        newContours.push_back(newContour);
+                        console.log(firstContour);
+                        console.log("Start and end of first contour cut from border and pieced together");
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -188,7 +249,7 @@ export function findClosestContour(pointX, pointY) {
     let contourIndex;
     let dist;
     let smallestDist = Infinity;
-    for (var i = 1; i < mats.contours.size(); i++) {
+    for (var i = 0; i < mats.contours.size(); i++) {
         dist = cv.pointPolygonTest(mats.contours.get(i), new cv.Point(pointX, pointY), true);
         if (Math.abs(dist) < smallestDist) {
             smallestDist = Math.abs(dist);
@@ -218,5 +279,5 @@ export function findClosestPoint(contour, pointX, pointY) {
             closestPointY = contourPointY;
         }
     }
-    return [closestPointX, closestPointY];
+    return i;
 }

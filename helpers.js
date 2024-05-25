@@ -1,5 +1,9 @@
 export let mats = {};
-export let state = {};
+export let state = {
+  PBC: true,
+  bpClickZone: 20,
+  stride_default: 20,
+};
 
 // useful function for async behavior
 export function waitFor(conditionFunction) {
@@ -13,7 +17,7 @@ export function waitFor(conditionFunction) {
 }
 
 // tool for arrow drawing function
-function lineToAngle(ctx, x0, y0, length, angle, isHead) {
+function lineToAngle(ctx, x0, y0, length, thickness, color, angle, isHead) {
   if (isHead === false) {
     // angle = (angle - 90) * Math.PI / 180;
     var x1 = x0 - (length * Math.cos(angle))/2,
@@ -27,7 +31,9 @@ function lineToAngle(ctx, x0, y0, length, angle, isHead) {
     var x2 = x0 + length * Math.cos(angle),
       y2 = y0 + length * Math.sin(angle);
   }
-  
+  ctx.lineWidth = thickness;
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
@@ -41,8 +47,8 @@ function lineToAngle(ctx, x0, y0, length, angle, isHead) {
 }
 
 // arrow drawing function
-export function drawArrow(ctx, x0, y0, arrowLength, headLength, angle) {
-  var pos = lineToAngle(ctx, x0, y0, arrowLength, angle, false);
-  lineToAngle(ctx, pos.x, pos.y, headLength, angle - (5*Math.PI/6), true);
-  lineToAngle(ctx, pos.x, pos.y, headLength, angle + (5*Math.PI/6), true);
+export function drawArrow(ctx, x0, y0, arrowLength, headLength, thickness, color, angle) {
+  var pos = lineToAngle(ctx, x0, y0, arrowLength, thickness, color, angle, false);
+  lineToAngle(ctx, pos.x, pos.y, headLength, thickness, color, angle - (5*Math.PI/6), true);
+  lineToAngle(ctx, pos.x, pos.y, headLength, thickness, color, angle + (5*Math.PI/6), true);
 }

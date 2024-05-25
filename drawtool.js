@@ -36,6 +36,8 @@ const dwThicknessInput = document.getElementById("dwThickness");
 let dwThickness = 31;
 // * Placing Blochlines * //
 const placeBlochlineBtn = document.getElementById("bltool");
+// * Toggling PBC * //
+const pbcBtn = document.getElementById("pbc");
 
 const tools = {
   pantool: {
@@ -100,10 +102,10 @@ let magImg = new Image();
 let magSource = offScreenCVS.toDataURL();
 startOpenCV();
 
-async function renderBoth(redrawMz = true, redrawMxy = true, blur = true) {
+async function renderBoth(redrawMz = true, redrawMxy = true, blur = true, highlightedContour) {
   state.updatingDone = false;
   renderImage();
-  renderMagImage(redrawMz,redrawMxy,blur);
+  renderMagImage(redrawMz,redrawMxy,blur,highlightedContour);
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
@@ -123,7 +125,7 @@ async function renderImage() {
 }
 
 //Once the image is loaded, draw the image onto the onscreen canvas.
-async function renderMagImage(redrawMz = true, redrawMxy = true, blur = true) {
+async function renderMagImage(redrawMz = true, redrawMxy = true, blur = true, highlightedContour) {
   if (redrawMz === true) {
     generatePreviewArrows();
     magSource = await drawMagSource(blur);
@@ -136,7 +138,7 @@ async function renderMagImage(redrawMz = true, redrawMxy = true, blur = true) {
       magCTX.imageSmoothingEnabled = false;
       magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
       if (redrawMxy === true) {
-        renderPreviewArrows();
+        renderPreviewArrows(highlightedContour);
       }
       console.log("Mag image posted")
     };
@@ -148,7 +150,7 @@ async function renderMagImage(redrawMz = true, redrawMxy = true, blur = true) {
     magCTX.imageSmoothingEnabled = false;
     magCTX.drawImage(magImg, 0, 0, magCVS.width, magCVS.height);
     if (redrawMxy === true) {
-      renderPreviewArrows();
+      renderPreviewArrows(highlightedContour);
     }
     console.log("Mag image posted")
   }
@@ -168,6 +170,7 @@ function initializeOnScreenCanvas() {
     baseDimensionY = rect.height
     baseDimensionX = Math.floor(baseDimensionY / offScreenAspectRatio)
   }
+  state.stride = state.stride_default;
 }
 
 //Resize the canvas if the window is resized
@@ -175,19 +178,36 @@ function flexCanvasSize() {
   initializeOnScreenCanvas();
   state.ratioX = onScreenCVS.width / offScreenCVS.width;
   state.ratioY = onScreenCVS.height / offScreenCVS.height;
-  renderBoth(false, false, false);
+  renderBoth(false, true, false);
 }
 
 //Add event listeners for canvas resizing
 canvasWidthInput.addEventListener('change', e => {
   offScreenCVS.width = e.target.value;
+  state.stride = state.stride_default * (offScreenCVS.width * offScreenCVS.height) / (1024*1024);
   initializeOnScreenCanvas();
   resetOffScreenCVS();
 });
 canvasHeightInput.addEventListener('change', e => {
   offScreenCVS.height = e.target.value;
+  state.stride = state.stride_default * (offScreenCVS.width * offScreenCVS.height) / (1024*1024);
   initializeOnScreenCanvas();
   resetOffScreenCVS();
+});
+
+onScreenCVS.addEventListener('mousemove', e => {
+  if (isFlipping === true) {
+    let mouseX = Math.floor(e.offsetX / state.ratioX);
+    let mouseY = Math.floor(e.offsetY / state.ratioY);
+    let targetContourIndex = findClosestContour(mouseX,mouseY);
+    renderBoth(false,true,false,targetContourIndex);
+  }
+});
+
+onScreenCVS.addEventListener('mouseout', e => {
+  if (isFlipping === true) {
+    renderBoth(false,true);
+  }
 });
 
 //====================================//
@@ -256,10 +276,13 @@ function redrawPoints() {
       }
       offScreenCTX.lineWidth = p.size;
       offScreenCTX.lineCap = 'round';
+      /*
       offScreenCTX.beginPath();
       offScreenCTX.moveTo(p.x0,p.y0)
       offScreenCTX.lineTo(p.x1,p.y1);
       offScreenCTX.stroke();
+      */
+      handleStroke(p.x0,p.y0,p.x1,p.y1,p.size)
       });
   });
 }
@@ -275,6 +298,10 @@ let firstY;
 onScreenCVS.addEventListener("mousemove", handleMouseMove);
 onScreenCVS.addEventListener("mousedown", handleMouseDown);
 onScreenCVS.addEventListener("mouseup", handleMouseUp);
+
+pbcBtn.addEventListener('change', e => {
+  state.PBC = !state.PBC;
+});
 
 //We only want the mouse to move if the mouse is down, so we need a variable to disable drawing while the mouse is not clicked.
 let clicked = false;
@@ -332,7 +359,7 @@ function handleMouseDown(e) {
     clicked = true;
     //Action-based
     firstX = Math.floor(e.offsetX / state.ratioX);
-    firstY = Math.floor(e.offsetY / state.rationY);
+    firstY = Math.floor(e.offsetY / state.ratioY);
     actionDraw(e);
   }
   if (isFlipping === true) {
@@ -364,10 +391,13 @@ function actionDraw(e) {
   } else if (isErasing ===true) {
     offScreenCTX.strokeStyle = "white";
   }
+  /*
   offScreenCTX.beginPath();
   offScreenCTX.moveTo(firstX,firstY)
   offScreenCTX.lineTo(mouseX,mouseY);
   offScreenCTX.stroke();
+  */
+  handleStroke(firstX,firstY,mouseX,mouseY,lineWidth)
 
   if (lastX !== mouseX || lastY !== mouseY) {
     points.push({
@@ -381,12 +411,56 @@ function actionDraw(e) {
     source = offScreenCVS.toDataURL();
     renderImage();
   }
-
   //save last point
   lastX = mouseX;
   lastY = mouseY;
   firstX = lastX;
   firstY = lastY;
+}
+
+function handleStroke(firstX,firstY,lastX,lastY,linewidth) {
+  offScreenCTX.beginPath();
+  offScreenCTX.moveTo(firstX,firstY);
+  offScreenCTX.lineTo(lastX,lastY);
+  offScreenCTX.stroke();
+  if (state.PBC === true) {
+    if (firstX < linewidth/2 || lastX < linewidth/2) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX+offScreenCVS.width,firstY);
+      offScreenCTX.lineTo(lastX+offScreenCVS.width,lastY);
+      offScreenCTX.stroke();
+    }
+    if (firstX > (offScreenCVS.width - linewidth/2) || lastX > (offScreenCVS.width - linewidth/2)) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX-offScreenCVS.width,firstY);
+      offScreenCTX.lineTo(lastX-offScreenCVS.width,lastY);
+      offScreenCTX.stroke();
+    }
+    if (firstY < linewidth/2 || lastY < linewidth/2) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX,firstY+offScreenCVS.height);
+      offScreenCTX.lineTo(lastX,lastY+offScreenCVS.height);
+      offScreenCTX.stroke();
+    }
+    if (firstY > (offScreenCVS.height - linewidth/2) || lastY > (offScreenCVS.height - linewidth/2)) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX,firstY-offScreenCVS.height);
+      offScreenCTX.lineTo(lastX,lastY-offScreenCVS.height);
+      offScreenCTX.stroke();
+    }
+    if ((firstX < linewidth/2 || lastX < linewidth/2) && (firstY < linewidth/2 || lastY < linewidth/2)) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX+offScreenCVS.width,firstY+offScreenCVS.height);
+      offScreenCTX.lineTo(lastX+offScreenCVS.width,lastY+offScreenCVS.height);
+      offScreenCTX.stroke();
+    }
+    if ((firstX < (offScreenCVS.width - linewidth/2) || lastX < (offScreenCVS.width - linewidth/2)) && (firstY > (offScreenCVS.height - linewidth/2) || lastY > (offScreenCVS.height - linewidth/2))) {
+      offScreenCTX.beginPath();
+      offScreenCTX.moveTo(firstX-offScreenCVS.width,firstY-offScreenCVS.height);
+      offScreenCTX.lineTo(lastX-offScreenCVS.width,lastY-offScreenCVS.height);
+      offScreenCTX.stroke();
+    }
+  }
 }
 
 //====================================//
@@ -400,6 +474,7 @@ async function startOpenCV() {
   mats.mz = new cv.Mat();
   mats.hierarchy = new cv.Mat();
   mats.xyAngs = [];
+  mats.bps = [];
   renderBoth(false, false, false);
   window.onresize = flexCanvasSize;
 }
@@ -409,9 +484,9 @@ async function startOpenCV() {
 //====================================//
 
 async function drawMagSource(blur) {
-  let mz = await generateMz(blur);
+  await generateMz(blur);
   console.log("Mz generated! Posting image...")
-  return imageDataToDataURL(matToImageData( mz ));
+  return imageDataToDataURL(matToImageData( mats.mz ));
 }
 
 async function generateMz(blur) {
@@ -419,7 +494,11 @@ async function generateMz(blur) {
   mats.cvsource = cv.imread(img);
   if (blur === true) {
     console.log("Blurring image, this may take a while...")
-    cv.GaussianBlur(mats.cvsource, mats.mz, mats.ksize, 0, 0, cv.BORDER_WRAP);
+    if (state.PBC === true) {
+      cv.GaussianBlur(mats.cvsource, mats.mz, mats.ksize, 0, 0, cv.BORDER_WRAP);
+    } else if (state.PBC === false) {
+      cv.GaussianBlur(mats.cvsource, mats.mz, mats.ksize, 0, 0, cv.BORDER_REPLICATE);
+    }
   } else if (blur === false) {
     console.log("Skipped gaussian blur...")
     mats.mz = mats.cvsource;
@@ -427,28 +506,40 @@ async function generateMz(blur) {
   return mats.mz;
 }
 
-async function generatePreviewArrows(stride = 20) {
+async function generatePreviewArrows(stride = state.stride) {
   await waitFor(_ => state.updatingDone === true)
   mats.cvsource = cv.imread(img);
   mats.contours = await findContours(mats.cvsource,cv.CHAIN_APPROX_NONE);
   mats.xyAngs = [];
   mats.chirality = [];
-  console.log("Found "+state.contour_number_noborder+" contour(s) (excluding border)");
-  for (var i = 1; i < mats.contours.size(); i++) {
-    var xyAng = await dwAngleGenerator(mats.contours.get(i));
+  mats.bps = [];
+  console.log("Found "+state.contour_number_noborder+" contour(s)");
+  for (var i = 0; i < mats.contours.size(); i++) {
+    var xyAng = await dwAngleGenerator(mats.contours.get(i),stride);
     mats.xyAngs.push(xyAng);
     mats.chirality.push(new Array(xyAng.length).fill(0));
-    console.log("Contour "+i+": "+xyAng.length+" pxs");
+    mats.bps.push([]);
+    console.log("Contour "+i+": "+mats.contours.get(i).rows+" pxs");
   }
 }
 
-async function renderPreviewArrows(stride = 20) {
+async function renderPreviewArrows(targetContourIndex) {
+  let arrowColor;
   for (var i = 0; i < mats.xyAngs.length; i++) {
+    if (i === targetContourIndex) {
+      arrowColor = "magenta";
+    } else {
+      arrowColor = "black";
+    }
     let xyAng = mats.xyAngs[i];
-    console.log("Drawing arrows for contour "+i)
-    for (var j = 0; j < xyAng.length; j+=stride) {
-      drawArrow(magCTX,xyAng[j][0]*state.ratioX,xyAng[j][1]*state.ratioY,
-                stride/2,stride/4, xyAng[j][2] + Math.PI*mats.chirality[i][j]);
+    let angle;
+    let arrowLength = state.stride*Math.sqrt(state.ratioX*state.ratioY);
+    let arrowThickness = Math.sqrt(1024*1024/offScreenCVS.width/offScreenCVS.width);
+    //console.log("Drawing arrows for contour "+i)
+    for (var j = 0; j < xyAng.length; j++) {
+      angle = xyAng[j][2] + Math.PI*mats.chirality[i][j];
+      drawArrow(magCTX,(xyAng[j][0]+0.5)*state.ratioX,(xyAng[j][1]+0.5)*state.ratioY,
+                arrowLength,arrowLength/2, arrowThickness, arrowColor, angle);
     }
   }
 }
@@ -456,12 +547,29 @@ async function renderPreviewArrows(stride = 20) {
 async function flipChirality(e) {
   let mouseX = Math.floor(e.offsetX / state.ratioX);
   let mouseY = Math.floor(e.offsetY / state.ratioY);
-  let targetContourIndex = findClosestContour(mouseX,mouseY) - 1;
+  let targetContourIndex = findClosestContour(mouseX,mouseY);
   for (var i = 0; i < mats.xyAngs[targetContourIndex].length; i++) {
     mats.chirality[targetContourIndex][i] = (mats.chirality[targetContourIndex][i]+1)%2;
   }
-  renderBoth(false,true);
+  renderBoth(false,true,false,targetContourIndex);
 }
 
-// use this line to convert cv.Mat to image
-// imageSource = imageDataToDataURL(matToImageData( src ));
+async function placeBP(e) {
+  let mouseX = Math.floor(e.offsetX / state.ratioX);
+  let mouseY = Math.floor(e.offsetY / state.ratioY);
+  let testdist;
+  let removedBP = false;
+  for (var i = 0; i < mats.bps.length; i++) {
+    testdist = Math.sqrt((mouseX-mats.bps[i][0])**2+(mouseY-mats.bps[i][1])**2)
+    if (testdist < state.bpClickZone) {
+      mats.bps.splice(i,1)
+      removedBP = true;
+    }
+  }
+  if (removedBP === false) {
+    let targetContourIndex = findClosestContour(mouseX,mouseY) - 1;
+    let targetPointIndex = findClosestPoint(mats.contours.get(targetContourIndex), mouseX, mouseY);
+    //mats.bps[targetContourIndex][] = []
+  }
+
+}

@@ -47,6 +47,11 @@
                 <button id='erasetool' name='erasetool' class="toolBtn">
                     <img src='./icons/erase.png' id='erasetoolImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
+            </div>
+            <label for="lineWidth">Line Width</label>
+            <input id="lineWidth" name="lineWidth" type="number" value="32" class="input">
+            <h2>Render</h2>
+            <div class="toolbuttons">
                 <button id='chiralitytool' name='chiralitytool' class="toolBtn">
                     <img src='./icons/chirality.svg' id='chiralitytoolImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
@@ -54,15 +59,13 @@
                     <img src='./icons/bp.svg' id='bptoolImg' class="toolBtnImg" height="30px" width="30px"/>
                 </button>
             </div>
-            <label for="lineWidth">Line Width</label>
-            <input id="lineWidth" name="lineWidth" type="number" value="32" class="input">
-            <button id='bltool' name='bltool' class="button">Place Blochline</button>
-            <h2>Render</h2>
-            <label for="dwThickness">DW Thickness</label>
+            <label for="bpsize">BP Width</label>
+            <input id="bpsize" name="bpsize" type="number" value="20" class="input">
+            <label for="dwThickness">DW Width</label>
             <input id="dwThickness" name="dwThickness" type="number" value="31" class="input">
             <div class="checkboxcontainer">
-                <input type="checkbox" id="neelcaps" name="neelcaps" value="false">
-                <label for="neelcaps">Néel Caps</label>
+                <input type="checkbox" id="pbc" name="pbc" value="true">
+                <label for="pbc">PBC</label>
             </div>
             <button id="save" class="button">Save</button>
         </div>
